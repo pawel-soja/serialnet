@@ -12,36 +12,6 @@
 #include <QWebSocketServer>
 #include <QWebSocket>
 
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <signal.h>
-
-
-static void daemonize()
-{
-    pid_t pid;
-    pid = fork();
-
-    if (pid < 0)      exit(EXIT_FAILURE);
-    if (pid > 0)      exit(EXIT_SUCCESS);
-    if (setsid() < 0) exit(EXIT_FAILURE);
-
-    signal(SIGCHLD, SIG_IGN);
-    signal(SIGHUP, SIG_IGN);
-
-    pid = fork();
-
-    if (pid < 0)      exit(EXIT_FAILURE);
-    if (pid > 0)      exit(EXIT_SUCCESS);
-
-    umask(0);
-
-    chdir("/");
-
-    for (auto x = sysconf(_SC_OPEN_MAX); x>=0; x--)
-        close(int(x));
-}
 
 int main(int argc, char *argv[])
 {
@@ -59,16 +29,12 @@ int main(int argc, char *argv[])
         {{"d", "device"},      QCoreApplication::tr("Device path, default: /dev/serial0"),  QCoreApplication::tr("path"),     "/dev/serial0"},
         {{"s", "speed"},       QCoreApplication::tr("Serial port baudrade, default: 9600"), QCoreApplication::tr("baudrate"), "9600"},
         {{"e", "echo"},        QCoreApplication::tr("Reply request message to client")},
-        {{"b", "background"},  QCoreApplication::tr("Run in background")},
         {"udp-port",           QCoreApplication::tr("Listen on UDP port"), "port"},
         {"tcp-port",           QCoreApplication::tr("Listen on TCP port"), "port"},
         {"ws-port",            QCoreApplication::tr("Listen on WebSocket port (binnary data)"), "port"},
         {"fakeserial",         QCoreApplication::tr("Don't open serial port")},
     });
     parser.process(a);
-
-    if (parser.isSet("background"))
-        daemonize();
 
     // Serial Port
     bool echo       = parser.isSet("echo");
