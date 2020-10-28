@@ -43,6 +43,6 @@ sudo make install
 ## Sky-Watcher Az mount via Raspberry PI
 Connect Sky-Watcher Az mount to Raspberry PI with RJ12 cable to UART pins, unlock uart by turning it on in raspi-config, then run serialnet:
 ```
-serialnet --device /dev/serial0 --speed 9600 --echo --udp-port 11880 --background
+serialnet --device /dev/serial0 --baud 9600 --cr-flush --udp-port 11880
 ```
 Now you can connect to the SynScan App by entering the Raspberry IP address in the settings.
