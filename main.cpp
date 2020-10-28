@@ -9,12 +9,15 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 
+#include <QLoggingCategory>
+
 #include <QWebSocketServer>
 #include <QWebSocket>
 
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
+    QLoggingCategory log("serialnet");
 
     QCoreApplication::setApplicationName("serialnet");
     QCoreApplication::setApplicationVersion("1.0");
@@ -34,8 +37,11 @@ int main(int argc, char *argv[])
         {"tcp-port",           QCoreApplication::tr("Listen on TCP port"), "port"},
         {"ws-port",            QCoreApplication::tr("Listen on WebSocket port (binnary data)"), "port"},
         {"fakeserial",         QCoreApplication::tr("Don't open serial port")},
+        {"verbose",            QCoreApplication::tr("Verbose")}
     });
     parser.process(a);
+
+    log.setEnabled(QtMsgType::QtDebugMsg, parser.isSet("verbose"));
 
     // Serial Port
     bool echo       = parser.isSet("echo");
@@ -70,6 +76,10 @@ int main(int argc, char *argv[])
     // Send data to all network clients
     auto replyToAll = [&](const QByteArray &data)
     {
+        qDebug(log).noquote().nospace()
+            << "Serial -> ALL"
+            << " " << data.toHex(' ');
+
         if (udpActivePort != 0)
             udpServer.writeDatagram(data, udpActiveAddress, udpActivePort);
 
@@ -112,6 +122,10 @@ int main(int argc, char *argv[])
             QNetworkDatagram datagram = udpServer.receiveDatagram();
             udpActiveAddress = datagram.senderAddress();
             udpActivePort = quint16(datagram.senderPort());
+            qDebug(log).noquote().nospace()
+                << "Serial <- UDP"
+                //<< " " << udpActiveAddress.toString() << ":" << udpActivePort
+                << " " << datagram.data().toHex(' ');
             broadcast(datagram.data());
         }
     });
@@ -121,11 +135,23 @@ int main(int argc, char *argv[])
         while (tcpServer.hasPendingConnections())
         {
             QTcpSocket *client = tcpServer.nextPendingConnection();
+            qDebug(log).noquote().nospace()
+                << "Open TCP Client"
+                << " " << client->peerAddress().toString() << ":" << client->peerPort();
             QObject::connect(client, &QTcpSocket::disconnected, [&, client](){
+                qDebug(log).noquote().nospace()
+                    << "Close TCP Client"
+                    << " " << client->peerAddress().toString() << ":" << client->peerPort();
                 tcpClientList.removeAll(client);
             });
             QObject::connect(client, &QTcpSocket::readyRead, [&, client](){
-                broadcast(client->readAll());
+                const QByteArray data = client->readAll();
+
+                qDebug(log).noquote().nospace()
+                    << "Serial <- TCP"
+                    //<< " " << client->peerAddress().toString() << ":" << client->peerPort()
+                    << " " << data.toHex(' ');
+                broadcast(data);
             });
             tcpClientList.append(client);
         }
@@ -149,7 +175,7 @@ int main(int argc, char *argv[])
     // Bind ports
     if (!parser.isSet("fakeserial") && !serial.open(QSerialPort::ReadWrite))
     {
-        qCritical().noquote().nospace()
+        qCritical(log).noquote().nospace()
             << "Can't open port " << device
             << " : " << serial.errorString();
 
@@ -158,7 +184,7 @@ int main(int argc, char *argv[])
 
     if (parser.isSet("udp-port") && !udpServer.bind(address, udpPort))
     {
-        qCritical().noquote().nospace()
+        qCritical(log).noquote().nospace()
             << "Can't grab UDP "
             << address.toString() << ":" << udpPort
             << " : "  << udpServer.errorString();
@@ -168,7 +194,7 @@ int main(int argc, char *argv[])
 
     if (parser.isSet("tcp-port") && !tcpServer.listen(address, tcpPort))
     {
-        qCritical().noquote().nospace()
+        qCritical(log).noquote().nospace()
             << "Can't grab TCP "
             << address.toString() << ":" << tcpPort
             << " : "  << tcpServer.errorString();
@@ -178,7 +204,7 @@ int main(int argc, char *argv[])
 
     if (parser.isSet("ws-port") && !wsServer.listen(address, wsPort))
     {
-        qCritical().noquote().nospace()
+        qCritical(log).noquote().nospace()
             << "Can't grab WebSocket "
             << address.toString() << ":" << wsPort
             << " : "  << wsServer.errorString();
