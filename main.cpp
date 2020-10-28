@@ -12,7 +12,6 @@
 #include <QWebSocketServer>
 #include <QWebSocket>
 
-
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
@@ -27,8 +26,10 @@ int main(int argc, char *argv[])
 
     parser.addOptions({
         {{"d", "device"},      QCoreApplication::tr("Device path, default: /dev/serial0"),  QCoreApplication::tr("path"),     "/dev/serial0"},
-        {{"s", "speed"},       QCoreApplication::tr("Serial port baudrade, default: 9600"), QCoreApplication::tr("baudrate"), "9600"},
+        {{"b", "baud"},        QCoreApplication::tr("Serial port baudrade, default: 9600"), QCoreApplication::tr("baudrate"), "9600"},
         {{"e", "echo"},        QCoreApplication::tr("Reply request message to client")},
+        {{"r", "cr-flush"},    QCoreApplication::tr("Flush the data from the serial port when a carriage return occurs")},
+        {{"n", "lf-flush"},    QCoreApplication::tr("Flush the data from the serial port when a line feed occurs")},
         {"udp-port",           QCoreApplication::tr("Listen on UDP port"), "port"},
         {"tcp-port",           QCoreApplication::tr("Listen on TCP port"), "port"},
         {"ws-port",            QCoreApplication::tr("Listen on WebSocket port (binnary data)"), "port"},
@@ -39,6 +40,8 @@ int main(int argc, char *argv[])
     // Serial Port
     bool echo       = parser.isSet("echo");
     QString device  = parser.value("device");
+    bool crFlush    = parser.isSet("cr-flush");
+    bool lfFlush    = parser.isSet("lf-flush");
 
     QSerialPort serial;
 
@@ -62,7 +65,7 @@ int main(int argc, char *argv[])
     QList<QWebSocket *> wsClientList;
 
     serial.setPortName(device);
-    serial.setBaudRate(parser.value("speed").toInt());
+    serial.setBaudRate(parser.value("baud").toInt());
 
     // Send data to all network clients
     auto replyToAll = [&](const QByteArray &data)
@@ -89,7 +92,18 @@ int main(int argc, char *argv[])
 
     // Serial Port Events
     QObject::connect(&serial, &QSerialPort::readyRead, [&](){
-        replyToAll(serial.readAll());
+        if (!crFlush && !lfFlush)
+        {
+            replyToAll(serial.readAll());
+            return;
+        }
+
+        int index;
+        while (lfFlush && (index = serial.peek(1024).indexOf('\n')) >= 0)
+            replyToAll(serial.read(index + 1));
+
+        while (crFlush && (index = serial.peek(1024).indexOf('\r')) >= 0)
+            replyToAll(serial.read(index + 1));
     });
 
     // Udp Server Events
