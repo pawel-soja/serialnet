@@ -41,8 +41,33 @@ sudo make install
 # Example
 
 ## Sky-Watcher Az mount via Raspberry PI
-Connect Sky-Watcher Az mount to Raspberry PI with RJ12 cable to UART pins, unlock uart by turning it on in raspi-config, then run serialnet:
+Connect Sky-Watcher Az mount to Raspberry PI with RJ12 cable to UART pins, unlock uart by turning it on in raspi-config, then run serialnet.
+### Run directly from the command line
 ```
 serialnet --device /dev/serial0 --baud 9600 --cr-flush --udp-port 11880
 ```
 Now you can connect to the SynScan App by entering the Raspberry IP address in the settings.
+### Run on boot - systemd
+Create a systemd service by copying the command below
+```
+cat << EOF | sudo tee -a /etc/systemd/system/serialnet-synscan.service
+[Unit]
+Description=Bridge between the network and the serial port
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/serialnet --device /dev/serial0 --baud 9600 --cr-flush --udp-port 11880
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+Enable service
+```
+sudo systemctl enable serialnet-synscan.service
+```
+Start the service without rebooting
+```
+sudo systemctl start serialnet-synscan.service
+```
